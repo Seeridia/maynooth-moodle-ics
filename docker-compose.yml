@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: maynooth-moodle-ics
+    restart: always
+    ports:
+      - "4700:3000"
+    env_file:
+      - .env
