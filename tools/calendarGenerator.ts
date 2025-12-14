@@ -39,7 +39,7 @@ function generateICS(events: Event[], leadTime: number) {
 
     if (leadTime >= 0) {
       eventObj.createAlarm({
-        trigger: -leadTime * 60,
+        trigger: leadTime * 60,
         description: `Reminder: ${summary} starts in ${leadTime} minutes.`,
       });
     }
