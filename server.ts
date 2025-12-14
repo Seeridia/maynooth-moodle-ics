@@ -18,13 +18,14 @@ app.get("/", (_req: Request, res: Response) => {
 app.get("/calendar", async (req: Request, res: Response) => {
   try {
     const token = req.query.token as string;
+    const leadTime = parseInt(req.query.leadTime as string) || 0;
 
     if (!token) {
       res.status(400).send("Error: Missing token parameter");
       return;
     }
 
-    const calendar = await getUserCalendar(token);
+    const calendar = await getUserCalendar(token, leadTime);
 
     res.set({
       "Content-Type": "text/calendar; charset=utf-8",
