@@ -1,23 +1,63 @@
 import axios from "axios";
-import type { Response, Event } from "../types/event";
+import type { Response, Event, ErrorResponse } from "../types/event";
 import ical from "ical-generator";
 import { htmlToText } from "html-to-text";
+import { MOODLE_URL } from "../config";
 
-const MOODLE_URL =
-  "https://moodle.maynoothuniversity.ie/webservice/rest/server.php";
-
+/**
+ * 从 Moodle 获取用户事件数据
+ * @param wstoken Moodle Web Service Token
+ * @returns Moodle API Response
+ */
 async function fetchData(wstoken: string): Promise<Response> {
-  const params = {
-    wsfunction: "core_calendar_get_action_events_by_timesort",
-    limittononsuspendedevents: 1,
-    moodlewsrestformat: "json",
-    wstoken,
-  };
+  try {
+    const params = {
+      wsfunction: "core_calendar_get_action_events_by_timesort",
+      limittononsuspendedevents: 1,
+      moodlewsrestformat: "json",
+      wstoken,
+    };
 
-  const response = await axios.get<Response>(MOODLE_URL, { params });
-  return response.data;
+    const response = await axios.get<Response | ErrorResponse>(MOODLE_URL, {
+      params,
+    });
+    const data = response.data;
+
+    // 检查是否为错误响应
+    if (isErrorResponse(data)) {
+      throw new Error(`Moodle API Error: ${data.errorcode} - ${data.message}`);
+    }
+
+    return data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(`Failed to fetch data from Moodle: ${error.message}`);
+    }
+    throw error;
+  }
 }
 
+/**
+ * 检查数据是否为错误响应
+ * @param data 待检查的数据
+ * @returns 是否为错误响应
+ */
+function isErrorResponse(data: any): data is ErrorResponse {
+  return (
+    data &&
+    typeof data === "object" &&
+    "errorcode" in data &&
+    "exception" in data &&
+    "message" in data
+  );
+}
+
+/**
+ * 生成 ICS 日历
+ * @param events 事件列表
+ * @param leadTime 提前提醒时间（分钟）
+ * @returns ICS 日历对象
+ */
 function generateICS(events: Event[], leadTime: number) {
   const calendar = ical({ name: "Moodle Events" });
 
@@ -48,6 +88,12 @@ function generateICS(events: Event[], leadTime: number) {
   return calendar;
 }
 
+/**
+ * 获取用户 ICS 日历
+ * @param token Moodle Web Service Token
+ * @param leadTime 提前提醒时间（分钟）
+ * @returns ICS 日历对象
+ */
 export default async function getUserCalendar(token: string, leadTime: number) {
   const data = await fetchData(token);
   return generateICS(data.events, leadTime);

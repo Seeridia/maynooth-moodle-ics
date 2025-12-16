@@ -1,9 +1,9 @@
 import express from "express";
 import type { Request, Response } from "express";
 import getUserCalendar from "./tools/calendarGenerator";
+import { PORT } from "./config";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 app.get("/", (_req: Request, res: Response) => {
   res.json({
@@ -35,9 +35,18 @@ app.get("/calendar", async (req: Request, res: Response) => {
     res.send(calendar.toString());
   } catch (error) {
     console.error("Calendar generation failed:", error);
-    const errorMessage =
-      error instanceof Error ? error.message : "Internal Server Error";
-    res.status(500).json({ error: errorMessage });
+
+    // Moodle API 错误
+    if (
+      error instanceof Error &&
+      error.message.startsWith("Moodle API Error:")
+    ) {
+      res.status(401).json({ error: error.message });
+    } else {
+      const errorMessage =
+        error instanceof Error ? error.message : "Internal Server Error";
+      res.status(500).json({ error: errorMessage });
+    }
   }
 });
 

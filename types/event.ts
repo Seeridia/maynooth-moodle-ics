@@ -8,6 +8,13 @@ export interface Response {
   [property: string]: any;
 }
 
+export interface ErrorResponse {
+  errorcode: string;
+  exception: string;
+  message: string;
+  [property: string]: any;
+}
+
 export interface Event {
   /** 事件ID */
   id: number;
