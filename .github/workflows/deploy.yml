@@ -8,6 +8,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      PORT: 3000
+      MOODLE_URL: https://example.com
 
     steps:
       - name: Checkout code
