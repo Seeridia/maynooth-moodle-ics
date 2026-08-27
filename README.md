@@ -16,6 +16,16 @@
    ```
 3. 将该链接添加到你的日历应用中（例如 Google Calendar、Apple Calendar、小米日历等）
 
+可以使用 `leadTime` 设置提前提醒分钟数，范围为 `0` 到 `10080`。使用
+`-1` 可以关闭提醒；未提供时会在事件发生时提醒：
+
+```text
+https://moodle.seeridia.top/calendar?token=YOUR_TOKEN_HERE&leadTime=30
+```
+
+订阅地址中的 token 等同于 Moodle 登录凭证，请勿公开分享。部署时也应确保
+反向代理和访问日志不会记录完整的 `token` 查询参数。
+
 ### 环境变量配置
 
 服务在启动时会验证必要的环境变量，建议按以下步骤配置：
@@ -29,9 +39,11 @@
 2. 编辑 `.env` 文件，确认包含：
 
    - `PORT`：服务监听端口（默认 3000）
-   - `MOODLE_URL`：Moodle WebService 端点，默认已设置为梅努斯的地址。
+   - `MOODLE_URL`：Moodle WebService 端点（默认使用 Maynooth Moodle）
+   - `MOODLE_TIMEOUT_MS`：请求 Moodle 的超时时间（默认 10000 毫秒）
 
-若缺失或格式错误，服务会在启动时报错并退出，避免使用到错误配置。
+环境变量为空时会使用上述默认值；提供的端口、URL 或超时格式错误时，服务会在
+启动阶段报错并退出。
 
 ### 运行测试
 
@@ -43,6 +55,9 @@ bun test
 
 # 运行测试（监听模式）
 bun test --watch
+
+# 类型检查
+bun run typecheck
 ```
 
 ## 预览

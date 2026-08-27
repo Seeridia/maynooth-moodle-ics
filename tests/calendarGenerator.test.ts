@@ -1,15 +1,54 @@
-import { describe, it, expect, spyOn, beforeEach, afterEach } from "bun:test";
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import axios from "axios";
-import getUserCalendar from "../tools/calendarGenerator";
+import type { Event, Response } from "../types/event";
+import {
+  fetchMoodleEvents,
+  generateICS,
+  default as getUserCalendar,
+} from "../tools/calendarGenerator";
+import {
+  InvalidMoodleResponseError,
+  InvalidTokenError,
+  UpstreamError,
+} from "../types/errors";
 
-describe("calendarGenerator 错误处理", () => {
-  let axiosGetSpy: any;
+function createEvent(overrides: Partial<Event> = {}): Event {
+  return {
+    id: 1,
+    name: "Test Event",
+    activityname: "Test Assignment",
+    description: "<p>Test Description</p>",
+    location: "Test Location",
+    timestart: 1_702_800_000,
+    timeduration: 3_600,
+    timemodified: 1_702_700_000,
+    course: {
+      id: 1,
+      fullname: "Test Course",
+      shortname: "TEST101",
+    },
+    action: {
+      name: "View submission",
+      url: "https://example.com/assignment/1",
+    },
+    ...overrides,
+  } as Event;
+}
 
-  afterEach(() => {
-    axiosGetSpy?.mockRestore();
-  });
+function createResponse(events: Event[], lastid = events.at(-1)?.id ?? 0): Response {
+  return {
+    events,
+    firstid: events.at(0)?.id ?? 0,
+    lastid,
+  };
+}
 
-  it("应该处理 Moodle API 返回的错误响应 (invalidtoken)", async () => {
+describe("Moodle 数据获取", () => {
+  let axiosGetSpy: ReturnType<typeof spyOn> | undefined;
+
+  afterEach(() => axiosGetSpy?.mockRestore());
+
+  it("将无效 token 转换为明确的认证错误", async () => {
     axiosGetSpy = spyOn(axios, "get").mockResolvedValue({
       data: {
         errorcode: "invalidtoken",
@@ -18,110 +57,75 @@ describe("calendarGenerator 错误处理", () => {
       },
     });
 
-    await expect(getUserCalendar("invalid_token", 0)).rejects.toThrow(
-      "Moodle API Error: invalidtoken - Invalid token - token not found"
+    await expect(getUserCalendar("invalid_token", 0)).rejects.toBeInstanceOf(
+      InvalidTokenError
     );
   });
 
-  it("应该处理网络错误", async () => {
-    const networkError = new Error("Network Error");
-    (networkError as any).isAxiosError = true;
-
+  it("隐藏上游网络错误细节", async () => {
+    const networkError = new Error("socket details");
+    (networkError as Error & { isAxiosError: boolean }).isAxiosError = true;
     axiosGetSpy = spyOn(axios, "get").mockRejectedValue(networkError);
 
-    await expect(getUserCalendar("some_token", 0)).rejects.toThrow(
-      "Failed to fetch data from Moodle: Network Error"
+    await expect(getUserCalendar("some_token", 0)).rejects.toEqual(
+      new UpstreamError("Failed to fetch data from Moodle", 502)
     );
   });
 
-  it("应该成功处理正常的响应", async () => {
-    axiosGetSpy = spyOn(axios, "get").mockResolvedValue({
-      data: {
-        events: [
-          {
-            id: 1,
-            name: "Test Event",
-            description: "<p>Test Description</p>",
-            descriptionformat: 1,
-            location: "Test Location",
-            categoryid: null,
-            groupid: null,
-            userid: 123,
-            repeatid: null,
-            eventcount: null,
-            component: "mod_assign",
-            modulename: "assign",
-            activityname: "Test Assignment",
-            activitystr: "Assignment",
-            instance: 1,
-            eventtype: "due",
-            timestart: 1702800000,
-            timeduration: 3600,
-            timesort: 1702800000,
-            timeusermidnight: 1702771200,
-            visible: 1,
-            timemodified: 1702700000,
-            overdue: false,
-            course: {
-              id: 1,
-              fullname: "Test Course",
-              shortname: "TEST101",
-              idnumber: "",
-              summary: "",
-              summaryformat: 1,
-              startdate: 1702000000,
-              enddate: 1710000000,
-              visible: true,
-              showactivitydates: true,
-              showcompletionconditions: true,
-              fullnamedisplay: "Test Course",
-              viewurl: "https://example.com/course/view.php?id=1",
-              courseimage: "",
-              progress: null,
-              hasprogress: false,
-              isfavourite: false,
-              hidden: false,
-              showshortname: false,
-              coursecategory: "Category",
-            },
-            subscription: {
-              displayeventsource: true,
-            },
-            canedit: true,
-            candelete: true,
-            deleteurl: "https://example.com/delete",
-            editurl: "https://example.com/edit",
-            viewurl: "https://example.com/view",
-            formattedtime: "1:00 PM - 2:00 PM",
-            formattedlocation: "Test Location",
-            isactionevent: true,
-            iscourseevent: false,
-            iscategoryevent: false,
-            groupname: null,
-            normalisedeventtype: "due",
-            normalisedeventtypetext: "Due",
-            action: {
-              name: "View submission",
-              url: "https://example.com/mod/assign/view.php?id=1",
-              itemcount: 1,
-              actionable: true,
-              showitemcount: false,
-            },
-            purpose: "assignment",
-          },
-        ],
-        firstid: 1,
-        lastid: 1,
-      },
+  it("拒绝结构异常的成功响应", async () => {
+    axiosGetSpy = spyOn(axios, "get").mockResolvedValue({ data: {} });
+
+    await expect(fetchMoodleEvents("token")).rejects.toBeInstanceOf(
+      InvalidMoodleResponseError
+    );
+  });
+
+  it("使用 lastid 获取后续页面", async () => {
+    const firstPage = Array.from({ length: 50 }, (_, index) =>
+      createEvent({ id: index + 1 })
+    );
+    axiosGetSpy = spyOn(axios, "get")
+      .mockResolvedValueOnce({ data: createResponse(firstPage, 50) })
+      .mockResolvedValueOnce({
+        data: createResponse([createEvent({ id: 51 })], 51),
+      });
+
+    const events = await fetchMoodleEvents("token");
+
+    expect(events).toHaveLength(51);
+    expect(axiosGetSpy).toHaveBeenCalledTimes(2);
+    expect(axiosGetSpy.mock.calls[1]?.[1]).toMatchObject({
+      params: { aftereventid: 50, limitnum: 50 },
+      timeout: 10_000,
     });
+  });
+});
 
-    const calendar = await getUserCalendar("valid_token", 15);
-    const icsString = calendar.toString();
+describe("ICS 生成", () => {
+  it("生成稳定 UID、链接、更新时间和提醒", () => {
+    const ics = generateICS([createEvent()], 15).toString();
 
-    // 验证生成的 ICS 包含必要的信息
-    expect(icsString).toContain("BEGIN:VCALENDAR");
-    expect(icsString).toContain("Test Assignment");
-    expect(icsString).toContain("Test Course");
-    expect(icsString).toContain("BEGIN:VALARM");
+    expect(ics).toContain("BEGIN:VCALENDAR");
+    expect(ics).toContain("UID:moodle-1@maynooth-moodle-ics");
+    expect(ics).toContain("Test Assignment");
+    expect(ics).toContain("Test Course");
+    expect(ics).toContain("BEGIN:VALARM");
+    expect(ics).toContain("URL;VALUE=URI:https://example.com/assignment/1");
+  });
+
+  it("零时长事件不生成无效的 DTEND", () => {
+    const ics = generateICS([createEvent({ timeduration: 0 })], -1).toString();
+
+    expect(ics).not.toContain("DTEND");
+    expect(ics).not.toContain("BEGIN:VALARM");
+  });
+
+  it("缺少 activityname 时使用事件名称", () => {
+    const ics = generateICS(
+      [createEvent({ activityname: "", name: "Fallback title" })],
+      -1
+    ).toString();
+
+    expect(ics).toContain("SUMMARY:Fallback title");
   });
 });

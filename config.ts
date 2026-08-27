@@ -4,34 +4,58 @@
 type Env = {
   PORT: number;
   MOODLE_URL: string;
+  MOODLE_TIMEOUT_MS: number;
 };
 
-function required(name: string, value: string | undefined): string {
-  if (!value || value.trim() === "") {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
-
-function parseNumber(
+function parseInteger(
   name: string,
   value: string | undefined,
-  fallback: number
+  fallback: number,
+  min: number,
+  max: number
 ): number {
   if (value === undefined || value.trim() === "") return fallback;
   const num = Number(value);
-  if (Number.isNaN(num)) {
+  if (!Number.isInteger(num) || num < min || num > max) {
     throw new Error(
-      `Environment variable ${name} must be a number, got: ${value}`
+      `Environment variable ${name} must be an integer between ${min} and ${max}, got: ${value}`
     );
   }
   return num;
 }
 
+function parseUrl(name: string, value: string | undefined, fallback: string) {
+  const rawValue = value?.trim() || fallback;
+
+  try {
+    const url = new URL(rawValue);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("unsupported protocol");
+    }
+    return url.toString();
+  } catch {
+    throw new Error(
+      `Environment variable ${name} must be a valid HTTP(S) URL, got: ${rawValue}`
+    );
+  }
+}
+
 const env: Env = {
-  PORT: parseNumber("PORT", process.env.PORT, 3000),
-  MOODLE_URL: required("MOODLE_URL", process.env.MOODLE_URL),
+  PORT: parseInteger("PORT", process.env.PORT, 3000, 1, 65535),
+  MOODLE_URL: parseUrl(
+    "MOODLE_URL",
+    process.env.MOODLE_URL,
+    "https://moodle.maynoothuniversity.ie/webservice/rest/server.php"
+  ),
+  MOODLE_TIMEOUT_MS: parseInteger(
+    "MOODLE_TIMEOUT_MS",
+    process.env.MOODLE_TIMEOUT_MS,
+    10_000,
+    1_000,
+    60_000
+  ),
 };
 
 export const PORT = env.PORT;
 export const MOODLE_URL = env.MOODLE_URL;
+export const MOODLE_TIMEOUT_MS = env.MOODLE_TIMEOUT_MS;
