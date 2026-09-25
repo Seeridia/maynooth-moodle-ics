@@ -72,8 +72,8 @@ ACR 构建规则应保持为：Git 标签 `release-v$version` 构建仓库根目
 `Dockerfile`，并将镜像版本设为 `$version`。代码变更自动构建需开启。当前规则
 不会因 `main` 分支提交而生成镜像。
 
-提交到 `main` 只运行测试、类型检查和 Docker 构建检查。先将本次 Compose 和 Actions
-改动合入并推送到 `main`；CI 通过后，在该提交上创建并推送一个新的发布标签：
+提交到 `main` 运行测试和类型检查；发布标签也会执行相同检查。CI 通过后，
+在该提交上创建并推送一个新的发布标签：
 
 ```bash
 git tag release-v1.2.3
@@ -81,12 +81,13 @@ git push origin release-v1.2.3
 ```
 
 ACR 会构建并推送 `1.2.3` 镜像；GitHub Actions 在测试通过后等待这个镜像出现，随后
-通过 SSH 将 Compose 文件同步到服务器，拉取指定版本并更新服务。服务器不再现场构建，
-更新时也不会先停止旧容器。发布标签应使用新的版本号，不要重复使用旧标签。
+将 Compose 文件同步到服务器，拉取指定版本并更新服务，最后等待容器健康检查通过。
+服务器不再现场构建。发布标签应使用新的版本号，不要重复使用旧标签。
 
 GitHub 仓库需要配置现有部署用的 `SERVER_HOST`、`SERVER_USER`、`SSH_PRIVATE_KEY`、
-`TARGET_DIR` Secrets；`ENV_FILE` 可选。ACR 仓库当前为公开仓库，服务器拉取镜像不需要
-在 GitHub Secrets 中保存 ACR 推送密码。
+`TARGET_DIR` Secrets。首次部署前，需在服务器的 `TARGET_DIR` 目录创建 `.env`，
+配置内容参照 `.env.example`；后续发布不会覆盖它。ACR 仓库当前为公开仓库，
+服务器拉取镜像不需要在 GitHub Secrets 中保存 ACR 推送密码。
 
 ## 预览
 

@@ -32,9 +32,6 @@ jobs:
       - name: Run type checks
         run: bun run typecheck
 
-      - name: Verify Docker build
-        run: docker build -t maynooth-moodle-ics:test .
-
   deploy:
     needs: test
     if: startsWith(github.ref, 'refs/tags/release-v')
@@ -43,25 +40,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Resolve ACR image tag
-        id: release
-        shell: bash
-        run: |
-          version="${GITHUB_REF_NAME#release-v}"
-          if [[ -z "$version" || "$version" == "$GITHUB_REF_NAME" ]]; then
-            echo "Expected a release-v* tag, got $GITHUB_REF_NAME" >&2
-            exit 1
-          fi
-          echo "image_tag=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Ensure target directory exists
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: mkdir -p "${{ secrets.TARGET_DIR }}"
 
       - name: Sync Compose file to server
         uses: appleboy/scp-action@v0.1.7
@@ -72,46 +50,48 @@ jobs:
           source: docker-compose.yml
           target: "${{ secrets.TARGET_DIR }}/"
 
-      - name: Write .env on server
-        env:
-          ENV_FILE: ${{ secrets.ENV_FILE }}
-        if: ${{ env.ENV_FILE != '' }}
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cat <<'EOF' > "${{ secrets.TARGET_DIR }}/.env"
-            ${{ secrets.ENV_FILE }}
-            EOF
-
       - name: Pull the ACR image and restart the service
         uses: appleboy/ssh-action@v1.0.3
         env:
-          IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
+          RELEASE_TAG: ${{ github.ref_name }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 35m
+          command_timeout: 40m
           script_stop: true
-          envs: IMAGE_TAG
+          envs: RELEASE_TAG
           script: |
             set -eu
+            export IMAGE_TAG="${RELEASE_TAG#release-v}"
+            if [ -z "$IMAGE_TAG" ] || [ "$IMAGE_TAG" = "$RELEASE_TAG" ]; then
+              echo "Invalid release tag: $RELEASE_TAG" >&2
+              exit 1
+            fi
             cd "${{ secrets.TARGET_DIR }}"
 
             attempt=1
             max_attempts=90
-            until IMAGE_TAG="$IMAGE_TAG" docker compose pull app; do
+            until docker compose pull app; do
               if [ "$attempt" -ge "$max_attempts" ]; then
                 echo "Timed out waiting for ACR image tag: $IMAGE_TAG" >&2
                 exit 1
               fi
-              echo "ACR image is not ready; retrying in 20 seconds ($attempt/$max_attempts)"
+              echo "ACR image pull failed; retrying in 20 seconds ($attempt/$max_attempts)"
               sleep 20
               attempt=$((attempt + 1))
             done
 
-            IMAGE_TAG="$IMAGE_TAG" docker compose up -d --no-build --remove-orphans
+            docker compose up -d --no-build
+
+            for attempt in $(seq 1 30); do
+              if [ "$(docker inspect --format '{{.State.Health.Status}}' maynooth-moodle-ics)" = healthy ]; then
+                docker compose ps
+                exit 0
+              fi
+              sleep 5
+            done
+
             docker compose ps
+            docker logs --tail 50 maynooth-moodle-ics
+            exit 1
