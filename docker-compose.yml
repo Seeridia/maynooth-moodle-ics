@@ -1,6 +1,6 @@
 services:
   app:
-    build: .
+    image: crpi-akjhmoniw59yirfb.cn-hangzhou.personal.cr.aliyuncs.com/seeridia/maynooth-moodle-ics:${IMAGE_TAG:?IMAGE_TAG must be set}
     container_name: maynooth-moodle-ics
     restart: always
     ports:
