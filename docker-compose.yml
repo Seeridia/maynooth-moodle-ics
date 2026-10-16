@@ -1,6 +1,7 @@
 services:
   app:
-    image: crpi-akjhmoniw59yirfb.cn-hangzhou.personal.cr.aliyuncs.com/seeridia/maynooth-moodle-ics:${IMAGE_TAG:?IMAGE_TAG must be set}
+    image: ${TCR_REGISTRY:-hkccr.ccs.tencentyun.com}/${TCR_NAMESPACE:-seeridia-static}/${TCR_REPOSITORY:-moodle-ics}:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: maynooth-moodle-ics
     restart: always
     ports:

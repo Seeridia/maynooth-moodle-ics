@@ -1,11 +1,23 @@
-name: Deploy to Server
+name: Check and Publish Moodle ICS
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-    tags:
-      - "release-v*"
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ${{ vars.TCR_REGISTRY || 'hkccr.ccs.tencentyun.com' }}
+  TCR_NAMESPACE: ${{ vars.TCR_NAMESPACE }}
+  TCR_REPOSITORY: ${{ vars.TCR_REPOSITORY }}
+  IMAGE: ${{ vars.TCR_REGISTRY || 'hkccr.ccs.tencentyun.com' }}/${{ vars.TCR_NAMESPACE }}/${{ vars.TCR_REPOSITORY }}
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
 
 jobs:
   test:
@@ -32,66 +44,113 @@ jobs:
       - name: Run type checks
         run: bun run typecheck
 
-  deploy:
+  publish:
     needs: test
-    if: startsWith(github.ref, 'refs/tags/release-v') && vars.MIGRATION_FREEZE != 'true'
+    if: github.repository_owner == 'Seeridia' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && vars.MIGRATION_FREEZE != 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Sync Compose file to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: docker-compose.yml
-          target: "${{ secrets.TARGET_DIR }}/"
-
-      - name: Pull the ACR image and restart the service
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Validate repository variables
+        shell: bash
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 40m
-          script_stop: true
-          envs: RELEASE_TAG
-          script: |
-            set -eu
-            export IMAGE_TAG="${RELEASE_TAG#release-v}"
-            if [ -z "$IMAGE_TAG" ] || [ "$IMAGE_TAG" = "$RELEASE_TAG" ]; then
-              echo "Invalid release tag: $RELEASE_TAG" >&2
+          TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
+          TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
+          DOKPLOY_WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          for variable in TCR_NAMESPACE TCR_REPOSITORY TCR_USERNAME TCR_PASSWORD DOKPLOY_WEBHOOK_URL; do
+            if [[ -z "${!variable}" ]]; then
+              echo "::error::Missing Actions variable or secret: $variable"
               exit 1
             fi
-            cd "${{ secrets.TARGET_DIR }}"
+          done
 
-            attempt=1
-            max_attempts=90
-            until docker compose pull app; do
-              if [ "$attempt" -ge "$max_attempts" ]; then
-                echo "Timed out waiting for ACR image tag: $IMAGE_TAG" >&2
-                exit 1
-              fi
-              echo "ACR image pull failed; retrying in 20 seconds ($attempt/$max_attempts)"
-              sleep 20
-              attempt=$((attempt + 1))
-            done
+      - name: Checkout
+        uses: actions/checkout@v6
 
-            docker compose up -d --no-build
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
 
-            for attempt in $(seq 1 30); do
-              if [ "$(docker inspect --format '{{.State.Health.Status}}' maynooth-moodle-ics)" = healthy ]; then
-                docker compose ps
-                exit 0
-              fi
-              sleep 5
-            done
+      - name: Log in to Tencent TCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
 
-            docker compose ps
-            docker logs --tail 50 maynooth-moodle-ics
+      - name: Build and load image
+        id: build
+        timeout-minutes: 15
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: |
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Push image to Tencent TCR
+        id: push
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker push "${IMAGE}:sha-${GITHUB_SHA}" | tee "$RUNNER_TEMP/tcr-push.log"
+          digest=$(sed -n 's/.*digest: \(sha256:[a-f0-9]\{64\}\).*/\1/p' "$RUNNER_TEMP/tcr-push.log" | tail -n 1)
+          if [[ -z "$digest" ]]; then
+            echo "::error::Push completed without a registry digest in the output"
             exit 1
+          fi
+          docker push "${IMAGE}:latest" | tee "$RUNNER_TEMP/tcr-latest-push.log"
+          latest_digest=$(sed -n 's/.*digest: \(sha256:[a-f0-9]\{64\}\).*/\1/p' "$RUNNER_TEMP/tcr-latest-push.log" | tail -n 1)
+          if [[ "$latest_digest" != "$digest" ]]; then
+            echo "::error::latest and SHA tags must resolve to the same image digest"
+            exit 1
+          fi
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger Dokploy Compose deployment
+        timeout-minutes: 2
+        env:
+          DOKPLOY_WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          umask 077
+          jq -n \
+            --arg ref "$GITHUB_REF" \
+            --arg sha "$GITHUB_SHA" \
+            --arg message "Deploy Moodle ICS image ${GITHUB_SHA}" \
+            '{ref: $ref, head_commit: {id: $sha, message: $message}}' \
+            > "$RUNNER_TEMP/dokploy-deploy-request.json"
+          http_code=$(curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
+            -X POST "$DOKPLOY_WEBHOOK_URL" \
+            -H "accept: application/json" \
+            -H "Content-Type: application/json" \
+            -H "x-github-event: push" \
+            --data-binary "@$RUNNER_TEMP/dokploy-deploy-request.json" \
+            --output "$RUNNER_TEMP/dokploy-deploy-response.json" \
+            --write-out '%{http_code}')
+          if [[ "$http_code" != "200" ]]; then
+            echo "::error::Dokploy Compose webhook rejected the request (HTTP $http_code)"
+            exit 1
+          fi
+          jq -e '.message == "Compose deployed successfully"' "$RUNNER_TEMP/dokploy-deploy-response.json" > /dev/null
+          echo "Dokploy Compose deployment request accepted."
+
+      - name: Show deployment image
+        env:
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          echo "### Moodle ICS 部署镜像" >> "$GITHUB_STEP_SUMMARY"
+          echo "Deploy target: ${IMAGE}:latest" >> "$GITHUB_STEP_SUMMARY"
+          echo "${IMAGE}:sha-${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Digest: ${IMAGE_DIGEST}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Dokploy deployment requested; this confirms submission, not deployment completion." >> "$GITHUB_STEP_SUMMARY"
