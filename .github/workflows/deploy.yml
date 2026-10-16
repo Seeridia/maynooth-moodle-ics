@@ -34,7 +34,7 @@ jobs:
 
   deploy:
     needs: test
-    if: startsWith(github.ref, 'refs/tags/release-v')
+    if: startsWith(github.ref, 'refs/tags/release-v') && vars.MIGRATION_FREEZE != 'true'
     runs-on: ubuntu-latest
 
     steps:
