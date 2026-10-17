@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="获取 Moodle API key，生成订阅链接，将作业截止时间添加到日历。">
+  <meta name="theme-color" content="#ffffff">
+  <title>Moodle Calendar</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/site.css">
+  <script src="/assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <header class="header">
+    <div class="header-inner">
+      <a class="brand" href="/"><img src="/assets/favicon.svg" width="20" height="20" alt="">Moodle Calendar</a>
+      <a class="muted-link" href="https://github.com/Seeridia/maynooth-moodle-ics" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+    </div>
+  </header>
+  <main id="main" class="container">
+    <div class="intro">
+      <h1>订阅 Moodle 日历</h1>
+      <p>将 Maynooth Moodle 的作业截止时间添加到你的日历。</p>
+    </div>
+
+    <section class="card" id="get-key" aria-labelledby="key-title">
+      <div class="card-header"><span class="step">1</span><h2 id="key-title">获取 API key</h2></div>
+      <div class="card-content">
+        <ol class="instructions">
+          <li>登录 <a href="https://moodle.maynoothuniversity.ie/" target="_blank" rel="noopener noreferrer">Maynooth Moodle ↗</a>。</li>
+          <li>打开用户菜单 → Preferences → <a href="https://moodle.maynoothuniversity.ie/user/managetoken.php" target="_blank" rel="noopener noreferrer">Security keys ↗</a>。</li>
+          <li>创建或复制 Moodle mobile web service 的 Token。</li>
+        </ol>
+        <p class="help">没有此入口？查看 <a href="https://www.yuque.com/seeridia/wzmvi5/dll14c8qdo4orwi4?singleDoc" target="_blank" rel="noopener noreferrer">图文教程 ↗</a>，或联系学校 Moodle 管理员。</p>
+      </div>
+    </section>
+
+    <section class="card" id="connect" aria-labelledby="connect-title">
+      <div class="card-header"><span class="step">2</span><h2 id="connect-title">生成订阅链接</h2></div>
+      <div class="card-content">
+        <noscript><p class="help">请启用 JavaScript，或手动使用 <code>https://moodle.seeridia.top/calendar?token=YOUR_TOKEN</code>，将 YOUR_TOKEN 替换为你的 API key。</p></noscript>
+        <form id="subscription-form" class="field-group">
+          <div class="field">
+            <label for="token">API key</label>
+            <div class="input-group"><input id="token" name="token" type="password" maxlength="512" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="粘贴你的 Moodle Token" required aria-describedby="token-help"><button type="button" id="toggle-token" aria-pressed="false" aria-label="显示 API key">显示</button></div>
+            <p class="help" id="token-help">API key 不会被保存。请勿分享密钥或订阅链接。</p>
+          </div>
+          <div class="field">
+            <label for="lead-time">提前提醒</label>
+            <select id="lead-time" name="leadTime"><option value="0">截止时间到达时</option><option value="15">提前 15 分钟</option><option value="30" selected>提前 30 分钟</option><option value="60">提前 1 小时</option><option value="1440">提前 1 天</option><option value="-1">关闭提醒</option></select>
+          </div>
+          <button class="button" type="submit">生成链接</button>
+          <p id="form-status" class="form-status" role="status" aria-live="polite"></p>
+        </form>
+        <div id="subscription-result" class="result" hidden>
+          <label for="subscription-url">订阅地址</label>
+          <div class="input-group"><input id="subscription-url" type="password" readonly autocomplete="off" aria-label="私人订阅地址"><button type="button" id="copy-url">复制链接</button></div>
+          <a id="apple-subscribe" class="button button-outline" href="#import">在日历中打开 ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="import" aria-labelledby="import-title">
+      <div class="card-header"><span class="step">3</span><h2 id="import-title">添加到日历</h2></div>
+      <div class="card-content">
+        <div class="calendar-tabs" aria-label="选择日历应用"><button type="button" id="tab-apple" data-panel="panel-apple">Apple</button><button type="button" id="tab-google" data-panel="panel-google">Google</button><button type="button" id="tab-outlook" data-panel="panel-outlook">Outlook</button></div>
+        <div class="import-panel" id="panel-apple">
+          <h3>iPhone / iPad</h3>
+          <p>日历 → 日历 → 添加日历 → 添加订阅日历。粘贴链接，完成订阅。</p>
+          <h3>Mac</h3>
+          <p>日历 → 文件 → 新建日历订阅。粘贴链接，设置自动刷新频率。</p>
+          <a class="reference-link" href="https://support.apple.com/en-ca/102301" target="_blank" rel="noopener noreferrer">Apple 官方说明 ↗</a>
+        </div>
+        <div class="import-panel" id="panel-google">
+          <ol class="instructions">
+            <li>在电脑上打开 <a href="https://calendar.google.com/" target="_blank" rel="noopener noreferrer">Google Calendar ↗</a>。</li>
+            <li>其他日历 → ＋ → 通过网址（From URL）。</li>
+            <li>粘贴链接，点击「添加日历」。</li>
+          </ol>
+          <a class="reference-link" href="https://support.google.com/calendar/answer/37100?hl=zh-Hans" target="_blank" rel="noopener noreferrer">Google 官方说明 ↗</a>
+        </div>
+        <div class="import-panel" id="panel-outlook">
+          <ol class="instructions">
+            <li>打开 Outlook 网页版的日历。</li>
+            <li>添加日历 → 从 Web 订阅（Subscribe from web）。</li>
+            <li>粘贴链接，设置名称并保存。</li>
+          </ol>
+          <a class="reference-link" href="https://support.microsoft.com/en-us/office/import-or-subscribe-to-a-calendar-in-outlook-com-or-outlook-on-the-web-cff1429c-5af6-41ec-a5b4-74f2c278e98c" target="_blank" rel="noopener noreferrer">Outlook 官方说明 ↗</a>
+        </div>
+      </div>
+      <div class="card-footer">请选择网址订阅，而非一次性导入 .ics。更新频率和提醒由日历应用决定。</div>
+    </section>
+  </main>
+</body>
+</html>

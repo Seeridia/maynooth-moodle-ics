@@ -8,6 +8,13 @@
 
 ## 使用方法
 
+打开 [Moodle Calendar 官网](https://moodle.seeridia.top/)，按页面指引获取 API key、
+生成私人订阅链接，并添加到 Apple、Google 或 Outlook 日历。官网的链接生成在
+浏览器中完成，不会保存 API key；实际订阅时日历应用会向本服务请求 Moodle 日程。
+请选择「通过网址订阅」，一次性导入 `.ics` 文件不会持续更新。
+
+手动配置方式仍然可用：
+
 1. 获取 token，我这边写了一个文档来告诉你怎么获取 token：[获取 Maynooth Moodle Token](https://www.yuque.com/seeridia/wzmvi5/dll14c8qdo4orwi4?singleDoc)
 2. 替换 `YOUR_TOKEN_HERE` 为你的 token，得到的便是你的订阅链接：
 
@@ -15,6 +22,9 @@
    https://moodle.seeridia.top/calendar?token=YOUR_TOKEN_HERE
    ```
 3. 将该链接添加到你的日历应用中（例如 Google Calendar、Apple Calendar、小米日历等）
+
+首页及静态资源位于 `public/`，由现有 Express 服务直接提供，无需独立前端构建。
+`/calendar?token=...` 订阅接口与 `/healthz` 健康检查保持不变；Docker 镜像会一并包含官网。
 
 可以使用 `leadTime` 设置提前提醒分钟数，范围为 `0` 到 `10080`。使用
 `-1` 可以关闭提醒；未提供时会在事件发生时提醒：

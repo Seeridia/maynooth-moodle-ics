@@ -3,9 +3,13 @@ import type { NextFunction, Request, Response } from "express";
 import getUserCalendar from "./tools/calendarGenerator";
 import { PORT } from "./config";
 import { AppError, BadRequestError } from "./types/errors";
+import path from "node:path";
 
 export const app = express();
 app.disable("x-powered-by");
+
+const publicDirectory = path.join(import.meta.dir, "public");
+app.use("/assets", express.static(path.join(publicDirectory, "assets")));
 
 export function parseToken(value: unknown): string {
   if (typeof value !== "string" || value.trim() === "") {
@@ -29,13 +33,12 @@ export function parseLeadTime(value: unknown): number {
 }
 
 app.get("/", (_req: Request, res: Response) => {
-  res.json({
-    status: "ok",
-    service: "maynooth-moodle-ics",
-    endpoints: {
-      calendar: "/calendar?token=YOUR_TOKEN",
-    },
+  res.set({
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   });
+  res.sendFile(path.join(publicDirectory, "index.html"));
 });
 
 app.get("/healthz", (_req: Request, res: Response) => {
