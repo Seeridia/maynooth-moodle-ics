@@ -4,6 +4,8 @@ import getUserCalendar from "./tools/calendarGenerator";
 import { PORT } from "./config";
 import { AppError, BadRequestError } from "./types/errors";
 import path from "node:path";
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 export const app = express();
 app.disable("x-powered-by");
@@ -33,12 +35,19 @@ export function parseLeadTime(value: unknown): number {
 }
 
 app.get("/", (_req: Request, res: Response) => {
+  let html = readFileSync(path.join(publicDirectory, "index.html"), "utf8");
+  for (const asset of ["site.css", "site.js"]) {
+    const content = readFileSync(path.join(publicDirectory, "assets", asset));
+    const version = createHash("sha256").update(content).digest("hex").slice(0, 12);
+    html = html.replaceAll(`/assets/${asset}`, `/assets/${asset}?v=${version}`);
+  }
   res.set({
+    "Cache-Control": "no-cache",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
     "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   });
-  res.sendFile(path.join(publicDirectory, "index.html"));
+  res.type("html").send(html);
 });
 
 app.get("/healthz", (_req: Request, res: Response) => {

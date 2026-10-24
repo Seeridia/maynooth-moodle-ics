@@ -3,6 +3,7 @@ import { app, parseLeadTime, parseToken } from "../server";
 import { BadRequestError } from "../types/errors";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { createHash } from "node:crypto";
 
 describe("官网与现有接口", () => {
   let server: Server;
@@ -39,6 +40,19 @@ describe("官网与现有接口", () => {
       const response = await fetch(`${origin}/assets/${asset}`);
       expect(response.status).toBe(200);
       expect((await response.text()).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("样式和脚本使用内容版本号，避免 CDN 返回旧资源", async () => {
+    const html = await (await fetch(origin)).text();
+    for (const asset of ["site.css", "site.js"]) {
+      const resource = html.match(new RegExp(`/assets/${asset.replace(".", "\\.")}\\?v=([a-f0-9]{12})`));
+      expect(resource).not.toBeNull();
+      const response = await fetch(`${origin}${resource![0]}`);
+      expect(response.status).toBe(200);
+      const content = await response.arrayBuffer();
+      const version = createHash("sha256").update(new Uint8Array(content)).digest("hex").slice(0, 12);
+      expect(resource![1]).toBe(version);
     }
   });
 
