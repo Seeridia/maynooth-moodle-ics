@@ -41,6 +41,10 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.3px; }
 .instructions { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
 .instructions li { padding-left: 2px; }
 .instructions li::marker { color: var(--muted-foreground); }
+.token-tutorial { gap: 20px; }
+.token-tutorial strong { font-weight: 600; }
+.tutorial-image { display: block; margin-top: 12px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.tutorial-image img { display: block; width: 100%; height: auto; }
 .help { color: var(--muted-foreground); font-size: 12px; line-height: 1.7; margin-top: 12px; overflow-wrap: anywhere; }
 .help a { color: var(--foreground); }
 .field-group { display: flex; flex-direction: column; gap: 20px; }
@@ -72,7 +76,6 @@ select { width: 100%; height: 40px; border: 1px solid var(--border); border-radi
 .import-panel p { color: var(--muted-foreground); font-size: 13px; line-height: 1.8; }
 .import-panel h3:not(:first-child) { margin-top: 16px; }
 .reference-link { display: inline-block; margin-top: 16px; color: var(--muted-foreground); font-size: 12px; }
-.card-footer { border-top: 1px solid var(--border); padding: 14px 24px; color: var(--muted-foreground); font-size: 12px; line-height: 1.7; }
 .skip-link { position: fixed; top: 8px; left: 8px; transform: translateY(-150%); padding: 8px 14px; background: var(--primary); color: var(--primary-foreground); border-radius: 6px; }
 .skip-link:focus { transform: none; }
 @media (max-width: 600px) {
@@ -82,7 +85,6 @@ select { width: 100%; height: 40px; border: 1px solid var(--border); border-radi
   .intro p { font-size: 13px; }
   .card-header { padding: 20px 20px 0; }
   .card-content { padding: 17px 20px 20px; }
-  .card-footer { padding: 14px 20px; }
   input, select { font-size: 16px; }
   .calendar-tabs { width: 100%; }
   .calendar-tabs button { flex: 1; padding-inline: 10px; }

@@ -27,12 +27,22 @@
     <section class="card" id="get-key" aria-labelledby="key-title">
       <div class="card-header"><span class="step">1</span><h2 id="key-title">获取 API key</h2></div>
       <div class="card-content">
-        <ol class="instructions">
-          <li>登录 <a href="https://moodle.maynoothuniversity.ie/" target="_blank" rel="noopener noreferrer">Maynooth Moodle ↗</a>。</li>
-          <li>打开用户菜单 → Preferences → <a href="https://moodle.maynoothuniversity.ie/user/managetoken.php" target="_blank" rel="noopener noreferrer">Security keys ↗</a>。</li>
-          <li>创建或复制 Moodle mobile web service 的 Token。</li>
+        <ol class="instructions token-tutorial">
+          <li>打开 <a href="https://moodle.maynoothuniversity.ie/user/managetoken.php" target="_blank" rel="noopener noreferrer">Security keys ↗</a>，使用学校账号登录。</li>
+          <li>
+            <p>找到 <strong>Moodle mobile web service</strong>，点击右侧的 <strong>Reset</strong>。</p>
+            <a class="tutorial-image" href="/assets/tutorial/reset-token.webp" target="_blank" rel="noopener noreferrer" aria-label="查看大图：Moodle mobile web service 的 Reset 按钮">
+              <img src="/assets/tutorial/reset-token.webp" width="2560" height="1802" loading="lazy" decoding="async" alt="Security keys 页面，红框标出了 Moodle mobile web service 这一行右侧的 Reset 按钮。">
+            </a>
+          </li>
+          <li>
+            <p>点击 <strong>Copy to clipboard</strong> 复制生成的 Token，粘贴到下方。离开页面后将不再显示，请及时保存。</p>
+            <a class="tutorial-image" href="/assets/tutorial/copy-token.webp" target="_blank" rel="noopener noreferrer" aria-label="查看大图：复制新生成的 Moodle Token">
+              <img src="/assets/tutorial/copy-token.webp" width="2652" height="1750" loading="lazy" decoding="async" alt="Reset 后的页面显示新 Token 和 Copy to clipboard 按钮，截图中的密钥已打码。">
+            </a>
+          </li>
         </ol>
-        <p class="help">没有此入口？查看 <a href="https://www.yuque.com/seeridia/wzmvi5/dll14c8qdo4orwi4?singleDoc" target="_blank" rel="noopener noreferrer">图文教程 ↗</a>，或联系学校 Moodle 管理员。</p>
+        <p class="help">请勿泄露 Token。再次点击 Reset 会生成新密钥，旧密钥随即失效。</p>
       </div>
     </section>
 
@@ -89,7 +99,6 @@
           <a class="reference-link" href="https://support.microsoft.com/en-us/office/import-or-subscribe-to-a-calendar-in-outlook-com-or-outlook-on-the-web-cff1429c-5af6-41ec-a5b4-74f2c278e98c" target="_blank" rel="noopener noreferrer">Outlook 官方说明 ↗</a>
         </div>
       </div>
-      <div class="card-footer">请选择网址订阅，而非一次性导入 .ics。更新频率和提醒由日历应用决定。</div>
     </section>
   </main>
 </body>
